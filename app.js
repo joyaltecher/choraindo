@@ -232,8 +232,11 @@ function renderHub() {
     const selectedType = document.getElementById('filter-type').value;
     const searchVal = document.getElementById('search-input').value.toLowerCase().trim();
     
+    const banned = JSON.parse(localStorage.getItem('choraindo_banned_phones')) || [];
+    
     // Filter Seekers (Requests)
     let filteredSeekers = requests.filter(item => {
+        if (banned.includes(item.phone)) return false;
         const matchesBlood = selectedBlood === 'ALL' || item.blood === selectedBlood;
         const matchesSearch = searchVal === '' || 
             item.hospital.toLowerCase().includes(searchVal) || 
@@ -244,6 +247,7 @@ function renderHub() {
     
     // Filter Donors
     let filteredDonors = donors.filter(item => {
+        if (banned.includes(item.phone)) return false;
         const matchesBlood = selectedBlood === 'ALL' || item.blood === selectedBlood;
         const matchesSearch = searchVal === '' || 
             item.college.toLowerCase().includes(searchVal) || 
@@ -274,7 +278,10 @@ function renderHub() {
                 </div>
                 <div class="card-actions">
                     <span class="card-urgency urgency-${item.urgency.toLowerCase()}">${item.urgency}</span>
-                    <button class="btn btn-primary" onclick="openContactModal('${item.contact}', '${item.phone}', 'Requires ${item.units} Unit(s) of ${item.blood} at ${item.hospital}')" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Help Now</button>
+                    ${currentUser ? 
+                        `<button class="btn btn-primary" onclick="handleContactClick(${item.id}, '${item.contact}', '${item.phone}', 'Requires ${item.units} Unit(s) of ${item.blood} at ${item.hospital}')" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Help Now</button>` :
+                        `<button class="btn btn-secondary" onclick="openAuthModal()" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;"><i class="fa-solid fa-lock" style="margin-right: 5px;"></i> Login to View</button>`
+                    }
                 </div>
             </div>
         `).join('');
@@ -298,7 +305,10 @@ function renderHub() {
                 </div>
                 <div class="card-actions">
                     <span class="card-urgency urgency-standard" style="background-color: #dcfce7; color: #15803d;"><i class="fa-solid fa-check" style="margin-right: 3px;"></i> Available</span>
-                    <button class="btn btn-secondary" onclick="openContactModal('${item.name}', '${item.phone}', 'Volunteer Donor from ${item.college} (${item.blood})')" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Contact Donor</button>
+                    ${currentUser ? 
+                        `<button class="btn btn-secondary" onclick="handleContactClick(${item.id}, '${item.name}', '${item.phone}', 'Volunteer Donor from ${item.college} (${item.blood})')" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Contact Donor</button>` :
+                        `<button class="btn btn-secondary" onclick="openAuthModal()" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;"><i class="fa-solid fa-lock" style="margin-right: 5px;"></i> Login to View</button>`
+                    }
                 </div>
             </div>
         `).join('');
@@ -322,7 +332,18 @@ function closeModal() {
     switchTab('hub');
 }
 
-function openContactModal(name, phone, details) {
+function closeContactModal() {
+    document.getElementById('contact-modal').style.display = 'none';
+}
+
+// Global active modal target references for reporting
+let activeContactPhone = '';
+let activeContactName = '';
+
+function openContactModal(targetId, name, phone, details) {
+    activeContactPhone = phone;
+    activeContactName = name;
+    
     document.querySelector('#contact-name span').innerText = name;
     document.querySelector('#contact-phone span').innerText = phone;
     document.querySelector('#contact-detail span').innerText = details;
@@ -335,8 +356,81 @@ function openContactModal(name, phone, details) {
     document.getElementById('contact-modal').style.display = 'flex';
 }
 
-function closeContactModal() {
-    document.getElementById('contact-modal').style.display = 'none';
+function handleContactClick(targetId, targetName, targetPhone, targetDetails) {
+    if (!currentUser) {
+        openAuthModal();
+        return;
+    }
+    
+    // Set up viewsToday if not present or date changed
+    const todayStr = new Date().toDateString();
+    if (!currentUser.viewsToday || currentUser.viewsToday.date !== todayStr) {
+        currentUser.viewsToday = {
+            date: todayStr,
+            viewedIds: []
+        };
+    }
+    
+    // Check viewed list
+    const alreadyViewed = currentUser.viewsToday.viewedIds.includes(targetId);
+    if (!alreadyViewed) {
+        if (currentUser.viewsToday.viewedIds.length >= 3) {
+            openModal("Daily View Limit Reached", "To protect our donors and seekers from scraping and harassment, you are limited to viewing 3 contact details per day.");
+            return;
+        }
+        
+        currentUser.viewsToday.viewedIds.push(targetId);
+        // Sync currentUser and global user pool
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+        users = users.map(u => u.phone === currentUser.phone ? { ...u, viewsToday: currentUser.viewsToday } : u);
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    }
+    
+    openContactModal(targetId, targetName, targetPhone, targetDetails);
+}
+
+function triggerReport() {
+    if (!currentUser) {
+        openModal("Authentication Required", "You must be logged in to file a community report.");
+        return;
+    }
+    
+    const confirmReport = confirm(`Are you sure you want to report ${activeContactName} for inappropriate behavior (flirting, spam, or abusive calls)? Three flags will suspend this number from Choraindo.`);
+    if (!confirmReport) return;
+    
+    // Fetch reports db
+    let reports = JSON.parse(localStorage.getItem('choraindo_reports')) || {};
+    reports[activeContactPhone] = (reports[activeContactPhone] || 0) + 1;
+    localStorage.setItem('choraindo_reports', JSON.stringify(reports));
+    
+    if (reports[activeContactPhone] >= 3) {
+        // Suspend number
+        let banned = JSON.parse(localStorage.getItem('choraindo_banned_phones')) || [];
+        if (!banned.includes(activeContactPhone)) {
+            banned.push(activeContactPhone);
+            localStorage.setItem('choraindo_banned_phones', JSON.stringify(banned));
+        }
+        
+        // Remove listings matching this phone
+        donors = donors.filter(d => d.phone !== activeContactPhone);
+        requests = requests.filter(r => r.phone !== activeContactPhone);
+        localStorage.setItem(DONORS_KEY, JSON.stringify(donors));
+        localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests));
+        
+        // Log out user if suspended user matches current session
+        if (currentUser && currentUser.phone === activeContactPhone) {
+            currentUser = null;
+            localStorage.removeItem(CURRENT_USER_KEY);
+            checkAuthSession();
+        }
+        
+        closeContactModal();
+        renderHub();
+        openModal("User Banned", `The phone number ${activeContactPhone} has been suspended from the network due to multiple community reports.`);
+    } else {
+        closeContactModal();
+        openModal("Report Filed", "Your report has been successfully submitted. We will monitor this user's activity.");
+    }
 }
 
 // --- USER AUTHENTICATION & LOGIN LOGIC ---
@@ -386,6 +480,13 @@ function handleSignup(event) {
     document.getElementById('err-s-phone').style.display = 'none';
     document.getElementById('err-s-confirm').style.display = 'none';
     
+    // Ban check
+    const banned = JSON.parse(localStorage.getItem('choraindo_banned_phones')) || [];
+    if (banned.includes(phone)) {
+        openModal("Registration Blocked", "This phone number is banned from registering on Choraindo.");
+        return;
+    }
+    
     // Password match validation
     if (password !== confirm) {
         document.getElementById('err-s-confirm').style.display = 'block';
@@ -428,6 +529,13 @@ function handleLogin(event) {
     const password = document.getElementById('l-password').value;
     
     document.getElementById('err-l-credentials').style.display = 'none';
+    
+    // Ban check
+    const banned = JSON.parse(localStorage.getItem('choraindo_banned_phones')) || [];
+    if (banned.includes(phone)) {
+        openModal("Account Suspended", "This phone number has been suspended from Choraindo due to community reports of inappropriate behavior.");
+        return;
+    }
     
     const user = users.find(u => u.phone === phone && u.password === password);
     if (!user) {
