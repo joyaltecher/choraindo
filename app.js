@@ -3,6 +3,8 @@
 // LocalStorage key names
 const DONORS_KEY = 'choraindo_donors';
 const REQUESTS_KEY = 'choraindo_requests';
+const USERS_KEY = 'choraindo_users';
+const CURRENT_USER_KEY = 'choraindo_current_user';
 
 // Default Mock Data for rich visual design and realistic initial states
 const defaultDonors = [
@@ -34,6 +36,8 @@ const clubLeaderboard = [
 // App State
 let donors = [];
 let requests = [];
+let users = [];
+let currentUser = null;
 
 // Initialize App
 window.addEventListener('DOMContentLoaded', () => {
@@ -44,13 +48,19 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!localStorage.getItem(REQUESTS_KEY)) {
         localStorage.setItem(REQUESTS_KEY, JSON.stringify(defaultRequests));
     }
+    if (!localStorage.getItem(USERS_KEY)) {
+        localStorage.setItem(USERS_KEY, JSON.stringify([]));
+    }
     
     donors = JSON.parse(localStorage.getItem(DONORS_KEY));
     requests = JSON.parse(localStorage.getItem(REQUESTS_KEY));
+    users = JSON.parse(localStorage.getItem(USERS_KEY));
+    currentUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY));
     
     // Setup views and static page features
     loadLeaderboards();
     renderHub();
+    checkAuthSession();
 });
 
 // --- SCREEN NAVIGATION & TAB SWITCHING ---
@@ -328,3 +338,161 @@ function openContactModal(name, phone, details) {
 function closeContactModal() {
     document.getElementById('contact-modal').style.display = 'none';
 }
+
+// --- USER AUTHENTICATION & LOGIN LOGIC ---
+function openAuthModal() {
+    // Hide error labels
+    document.getElementById('err-l-credentials').style.display = 'none';
+    document.getElementById('err-s-phone').style.display = 'none';
+    document.getElementById('err-s-confirm').style.display = 'none';
+    
+    toggleAuthTab('login');
+    document.getElementById('auth-modal').style.display = 'flex';
+}
+
+function closeAuthModal() {
+    document.getElementById('auth-modal').style.display = 'none';
+}
+
+function toggleAuthTab(tab) {
+    const loginBtn = document.getElementById('tab-login-btn');
+    const signupBtn = document.getElementById('tab-signup-btn');
+    const loginView = document.getElementById('auth-login-view');
+    const signupView = document.getElementById('auth-signup-view');
+    
+    if (tab === 'login') {
+        loginBtn.classList.add('active');
+        signupBtn.classList.remove('active');
+        loginView.style.display = 'block';
+        signupView.style.display = 'none';
+    } else {
+        signupBtn.classList.add('active');
+        loginBtn.classList.remove('active');
+        signupView.style.display = 'block';
+        loginView.style.display = 'none';
+    }
+}
+
+function handleSignup(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('s-name').value.trim();
+    const email = document.getElementById('s-email').value.trim();
+    const blood = document.getElementById('s-blood').value;
+    const phone = document.getElementById('s-phone').value.trim();
+    const password = document.getElementById('s-password').value;
+    const confirm = document.getElementById('s-confirm').value;
+    
+    document.getElementById('err-s-phone').style.display = 'none';
+    document.getElementById('err-s-confirm').style.display = 'none';
+    
+    // Password match validation
+    if (password !== confirm) {
+        document.getElementById('err-s-confirm').style.display = 'block';
+        return;
+    }
+    
+    // Phone uniqueness check
+    const duplicate = users.some(u => u.phone === phone);
+    if (duplicate) {
+        document.getElementById('err-s-phone').style.display = 'block';
+        return;
+    }
+    
+    const newUser = {
+        id: Date.now(),
+        name,
+        email,
+        blood,
+        phone,
+        password
+    };
+    
+    users.push(newUser);
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    
+    currentUser = newUser;
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+    
+    document.getElementById('signup-form').reset();
+    closeAuthModal();
+    checkAuthSession();
+    
+    openModal("Registration Successful!", `Welcome, ${name}! Your account has been created. You can now use the forms to donate or request blood.`);
+}
+
+function handleLogin(event) {
+    event.preventDefault();
+    
+    const phone = document.getElementById('l-phone').value.trim();
+    const password = document.getElementById('l-password').value;
+    
+    document.getElementById('err-l-credentials').style.display = 'none';
+    
+    const user = users.find(u => u.phone === phone && u.password === password);
+    if (!user) {
+        document.getElementById('err-l-credentials').style.display = 'block';
+        return;
+    }
+    
+    currentUser = user;
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+    
+    document.getElementById('login-form').reset();
+    closeAuthModal();
+    checkAuthSession();
+    
+    openModal("Welcome Back!", `Hello, ${user.name}! You are logged in successfully.`);
+}
+
+function logoutUser() {
+    currentUser = null;
+    localStorage.removeItem(CURRENT_USER_KEY);
+    
+    checkAuthSession();
+    openModal("Logged Out", "You have successfully logged out of your session.");
+}
+
+function checkAuthSession() {
+    const navAuth = document.getElementById('nav-auth-section');
+    const donateOverlay = document.getElementById('donate-auth-overlay');
+    const requestOverlay = document.getElementById('request-auth-overlay');
+    
+    if (currentUser) {
+        navAuth.innerHTML = `
+            <div class="user-profile-menu">
+                <span><i class="fa-solid fa-user"></i> Hi, ${currentUser.name.split(' ')[0]}</span>
+                <button class="btn btn-secondary" onclick="logoutUser()" style="padding: 8px 16px; font-size: 13px;">Logout</button>
+            </div>
+        `;
+        
+        if (donateOverlay) donateOverlay.style.display = 'none';
+        if (requestOverlay) requestOverlay.style.display = 'none';
+        
+        // Prefill forms
+        document.getElementById('d-name').value = currentUser.name;
+        document.getElementById('d-blood').value = currentUser.blood;
+        document.getElementById('d-phone').value = currentUser.phone;
+        document.getElementById('d-email').value = currentUser.email;
+        
+        document.getElementById('r-contact').value = currentUser.name;
+        document.getElementById('r-phone').value = currentUser.phone;
+    } else {
+        navAuth.innerHTML = `
+            <button class="btn btn-primary" onclick="openAuthModal()" style="padding: 10px 20px; font-size: 14px;">Login / Register</button>
+        `;
+        
+        if (donateOverlay) donateOverlay.style.display = 'flex';
+        if (requestOverlay) requestOverlay.style.display = 'flex';
+        
+        // Clear fields
+        document.getElementById('d-name').value = '';
+        document.getElementById('d-blood').value = '';
+        document.getElementById('d-phone').value = '';
+        document.getElementById('d-email').value = '';
+        
+        document.getElementById('r-contact').value = '';
+        document.getElementById('r-phone').value = '';
+    }
+}
+

@@ -1076,3 +1076,70 @@ footer {
         gap: 0;
     }
 }
+
+/* Authentication Lock Overlay Styles */
+.auth-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(8px);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.25s ease-out;
+}
+
+.auth-overlay-content {
+    text-align: center;
+    max-width: 320px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.auth-overlay-content h3 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+/* User Session Navigation Bar Styles */
+.user-profile-menu {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 14.5px;
+    font-weight: 600;
+}
+
+.user-profile-menu span {
+    color: var(--red-main);
+    background-color: var(--red-light);
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--red-soft);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Authentication Tab controls */
+.auth-tabs button {
+    transition: var(--transition);
+}
+
+.auth-tabs button:hover {
+    color: var(--red-main) !important;
+}
+
+.auth-tab-btn.active {
+    color: var(--red-main) !important;
+    border-bottom-color: var(--red-main) !important;
+}

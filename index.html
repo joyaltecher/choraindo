@@ -23,8 +23,8 @@
                 <a class="nav-link" id="link-request" onclick="switchTab('request')">Request Blood</a>
                 <a class="nav-link" id="link-hub" onclick="switchTab('hub')">Matching Board</a>
             </nav>
-            <div>
-                <button class="btn btn-primary" onclick="switchTab('donate')" style="padding: 10px 20px; font-size: 14px;">Become a Donor</button>
+            <div id="nav-auth-section">
+                <button class="btn btn-primary" onclick="openAuthModal()" style="padding: 10px 20px; font-size: 14px;">Login / Register</button>
             </div>
         </div>
     </header>
@@ -168,7 +168,15 @@
         <!-- 2. DONATE BLOOD FORM -->
         <section id="page-donate" class="page">
             <div class="form-layout">
-                <div class="form-card">
+                <div class="form-card" style="position: relative;">
+                    <div class="auth-overlay" id="donate-auth-overlay">
+                        <div class="auth-overlay-content">
+                            <i class="fa-solid fa-lock" style="font-size: 40px; color: var(--red-main); margin-bottom: 15px;"></i>
+                            <h3>Authentication Required</h3>
+                            <p style="text-align: center; color: var(--text-muted); font-size: 14px; margin-bottom: 10px;">Please log in or create an account to list yourself as a donor.</p>
+                            <button class="btn btn-primary" onclick="openAuthModal()" style="margin-top: 10px; width: auto; padding: 10px 24px;">Login / Register</button>
+                        </div>
+                    </div>
                     <h2>Register as a Donor</h2>
                     <p class="form-subtitle">Make yourself available. Your details will be searchable by people needing blood in your area.</p>
                     
@@ -249,7 +257,15 @@
         <!-- 3. REQUEST BLOOD FORM -->
         <section id="page-request" class="page">
             <div class="form-layout">
-                <div class="form-card">
+                <div class="form-card" style="position: relative;">
+                    <div class="auth-overlay" id="request-auth-overlay">
+                        <div class="auth-overlay-content">
+                            <i class="fa-solid fa-lock" style="font-size: 40px; color: var(--red-main); margin-bottom: 15px;"></i>
+                            <h3>Authentication Required</h3>
+                            <p style="text-align: center; color: var(--text-muted); font-size: 14px; margin-bottom: 10px;">Please log in or create an account to publish a blood request.</p>
+                            <button class="btn btn-primary" onclick="openAuthModal()" style="margin-top: 10px; width: auto; padding: 10px 24px;">Login / Register</button>
+                        </div>
+                    </div>
                     <h2>Request Blood</h2>
                     <p class="form-subtitle">Create a request. We will publish it immediately on our live matching board.</p>
                     
@@ -411,6 +427,81 @@
                 <button class="btn btn-secondary" onclick="closeContactModal()" style="flex: 1; padding: 10px;">Close</button>
                 <button class="btn btn-primary" id="btn-call-direct" style="flex: 1; padding: 10px;">Call Now</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal Overlay -->
+    <div class="modal-overlay" id="auth-modal">
+        <div class="modal-card" style="max-width: 440px; text-align: center;">
+            <div class="auth-tabs" style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 25px;">
+                <button class="auth-tab-btn active" id="tab-login-btn" onclick="toggleAuthTab('login')" style="flex: 1; padding: 12px; background: none; border: none; border-bottom: 3px solid var(--red-main); font-weight: 700; font-family: var(--font-outfit); font-size: 16px; cursor: pointer; color: var(--text-dark);">Log In</button>
+                <button class="auth-tab-btn" id="tab-signup-btn" onclick="toggleAuthTab('signup')" style="flex: 1; padding: 12px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: 500; font-family: var(--font-outfit); font-size: 16px; cursor: pointer; color: var(--text-muted);">Sign Up</button>
+            </div>
+            
+            <!-- Log In Form -->
+            <div id="auth-login-view">
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="form-group" style="text-align: left;">
+                        <label for="l-phone">Phone Number</label>
+                        <input type="tel" id="l-phone" class="form-control" placeholder="Enter 10-digit number" required pattern="[0-9]{10}">
+                    </div>
+                    <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                        <label for="l-password">Password</label>
+                        <input type="password" id="l-password" class="form-control" placeholder="Enter password" required>
+                        <span class="error-message" id="err-l-credentials" style="margin-top: 5px;">Invalid phone number or password.</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Log In</button>
+                </form>
+            </div>
+            
+            <!-- Sign Up Form -->
+            <div id="auth-signup-view" style="display: none;">
+                <form id="signup-form" onsubmit="handleSignup(event)">
+                    <div class="form-group" style="text-align: left;">
+                        <label for="s-name">Full Name</label>
+                        <input type="text" id="s-name" class="form-control" placeholder="Enter full name" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="text-align: left;">
+                            <label for="s-email">Email Address</label>
+                            <input type="email" id="s-email" class="form-control" placeholder="Email" required>
+                        </div>
+                        <div class="form-group" style="text-align: left;">
+                            <label for="s-blood">Blood Group</label>
+                            <select id="s-blood" class="form-control" required>
+                                <option value="" disabled selected>Select</option>
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="text-align: left;">
+                        <label for="s-phone">Phone Number (Login ID)</label>
+                        <input type="tel" id="s-phone" class="form-control" placeholder="10-digit phone number" required pattern="[0-9]{10}">
+                        <span class="error-message" id="err-s-phone" style="margin-top: 5px;">This phone number is already registered.</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="text-align: left;">
+                            <label for="s-password">Password</label>
+                            <input type="password" id="s-password" class="form-control" placeholder="Min 6 chars" required minlength="6">
+                        </div>
+                        <div class="form-group" style="text-align: left;">
+                            <label for="s-confirm">Confirm Password</label>
+                            <input type="password" id="s-confirm" class="form-control" placeholder="Confirm" required minlength="6">
+                            <span class="error-message" id="err-s-confirm" style="margin-top: 5px;">Passwords do not match.</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Create Account</button>
+                </form>
+            </div>
+            
+            <button class="btn btn-secondary" onclick="closeAuthModal()" style="width: 100%; margin-top: 15px; padding: 10px;">Cancel</button>
         </div>
     </div>
 
