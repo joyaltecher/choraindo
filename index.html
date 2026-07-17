@@ -410,6 +410,28 @@
         </div>
     </div>
 
+    <!-- Location Verification Modal -->
+    <div class="modal-overlay" id="location-modal">
+        <div class="modal-card" style="max-width: 440px; text-align: left;">
+            <div class="success-icon" style="background-color: #fef3c7; color: #d97706; width: 60px; height: 60px; font-size: 26px; border: none; margin-bottom: 15px; display: flex; align-items: center; justify-content: center;"><i class="fa-solid fa-location-dot"></i></div>
+            <h3 style="margin-bottom: 5px;">Hospital Location Check</h3>
+            <p style="margin-bottom: 20px; font-size: 13.5px; line-height: 1.4; color: var(--text-muted);">To protect volunteer donors from harassment, you must be physically present at the hospital to view their phone number.</p>
+            
+            <div class="form-group">
+                <label for="l-hospital-name">Name of Current Hospital</label>
+                <input type="text" id="l-hospital-name" class="form-control" placeholder="e.g. Lissie Hospital, Cochin (or type 'Test')" required>
+                <span class="error-message" id="err-l-geofence" style="margin-top: 5px;"></span>
+            </div>
+            
+            <div style="display: flex; gap: 15px; margin-top: 25px;">
+                <button class="btn btn-secondary" onclick="closeLocationModal()" style="flex: 1; padding: 10px;">Cancel</button>
+                <button class="btn btn-primary" id="btn-verify-gps" onclick="verifyGeofence()" style="flex: 1; padding: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fa-solid fa-location-crosshairs"></i> Verify GPS
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Contact Seeker/Donor Modal -->
     <div class="modal-overlay" id="contact-modal">
         <div class="modal-card" style="max-width: 440px; text-align: left;">

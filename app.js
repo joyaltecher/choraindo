@@ -279,7 +279,7 @@ function renderHub() {
                 <div class="card-actions">
                     <span class="card-urgency urgency-${item.urgency.toLowerCase()}">${item.urgency}</span>
                     ${currentUser ? 
-                        `<button class="btn btn-primary" onclick="handleContactClick(${item.id}, '${item.contact}', '${item.phone}', 'Requires ${item.units} Unit(s) of ${item.blood} at ${item.hospital}')" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Help Now</button>` :
+                        `<button class="btn btn-primary" onclick="handleContactClick(${item.id}, '${item.contact}', '${item.phone}', 'Requires ${item.units} Unit(s) of ${item.blood} at ${item.hospital}', false)" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Help Now</button>` :
                         `<button class="btn btn-secondary" onclick="openAuthModal()" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;"><i class="fa-solid fa-lock" style="margin-right: 5px;"></i> Login to View</button>`
                     }
                 </div>
@@ -306,7 +306,7 @@ function renderHub() {
                 <div class="card-actions">
                     <span class="card-urgency urgency-standard" style="background-color: #dcfce7; color: #15803d;"><i class="fa-solid fa-check" style="margin-right: 3px;"></i> Available</span>
                     ${currentUser ? 
-                        `<button class="btn btn-secondary" onclick="handleContactClick(${item.id}, '${item.name}', '${item.phone}', 'Volunteer Donor from ${item.college} (${item.blood})')" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Contact Donor</button>` :
+                        `<button class="btn btn-secondary" onclick="handleContactClick(${item.id}, '${item.name}', '${item.phone}', 'Volunteer Donor from ${item.college} (${item.blood})', true)" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">Contact Donor</button>` :
                         `<button class="btn btn-secondary" onclick="openAuthModal()" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;"><i class="fa-solid fa-lock" style="margin-right: 5px;"></i> Login to View</button>`
                     }
                 </div>
@@ -356,7 +356,151 @@ function openContactModal(targetId, name, phone, details) {
     document.getElementById('contact-modal').style.display = 'flex';
 }
 
-function handleContactClick(targetId, targetName, targetPhone, targetDetails) {
+// Pre-defined coordinates for Cochin hospitals for fast offline matches
+const hospitalCache = {
+    "general hospital cochin": { lat: 9.9793, lon: 76.2801 },
+    "general hospital, cochin": { lat: 9.9793, lon: 76.2801 },
+    "lissie hospital cochin": { lat: 9.9926, lon: 76.2878 },
+    "lissie hospital, cochin": { lat: 9.9926, lon: 76.2878 },
+    "medical trust hospital cochin": { lat: 9.9632, lon: 76.2858 },
+    "medical trust hospital, cochin": { lat: 9.9632, lon: 76.2858 },
+    "aster medcity cochin": { lat: 10.0264, lon: 76.2625 },
+    "aster medcity, cochin": { lat: 10.0264, lon: 76.2625 },
+    "amrita hospital cochin": { lat: 10.0336, lon: 76.2917 },
+    "amrita hospital, cochin": { lat: 10.0336, lon: 76.2917 }
+};
+
+let pendingContactId = null;
+let pendingContactName = '';
+let pendingContactPhone = '';
+let pendingContactDetails = '';
+
+function openLocationModal() {
+    document.getElementById('err-l-geofence').style.display = 'none';
+    document.getElementById('l-hospital-name').value = '';
+    document.getElementById('location-modal').style.display = 'flex';
+}
+
+function closeLocationModal() {
+    document.getElementById('location-modal').style.display = 'none';
+}
+
+function verifyGeofence() {
+    const hospitalInput = document.getElementById('l-hospital-name').value.trim();
+    const errLabel = document.getElementById('err-l-geofence');
+    const verifyBtn = document.getElementById('btn-verify-gps');
+    
+    if (!hospitalInput) {
+        errLabel.innerText = "Please enter the hospital name.";
+        errLabel.style.display = 'block';
+        return;
+    }
+    
+    errLabel.style.display = 'none';
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Verifying GPS...`;
+    
+    // Check developer bypass
+    if (hospitalInput.toLowerCase().includes('test')) {
+        setTimeout(() => {
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Verify GPS`;
+            closeLocationModal();
+            openContactModal(pendingContactId, pendingContactName, pendingContactPhone, pendingContactDetails);
+        }, 1000);
+        return;
+    }
+    
+    // Request current GPS coordinates
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const seekerLat = position.coords.latitude;
+            const seekerLon = position.coords.longitude;
+            
+            // Look up hospital coordinates
+            const cleanKey = hospitalInput.toLowerCase().replace(/[^a-z0-9\s,]/g, '').trim();
+            let matchedCoords = null;
+            
+            // Check cache
+            for (const [key, coords] of Object.entries(hospitalCache)) {
+                if (cleanKey.includes(key) || key.includes(cleanKey)) {
+                    matchedCoords = coords;
+                    break;
+                }
+            }
+            
+            if (matchedCoords) {
+                checkDistance(seekerLat, seekerLon, matchedCoords.lat, matchedCoords.lon, hospitalInput);
+            } else {
+                // Fallback to Nominatim OpenStreetMap Geocoding API
+                const query = encodeURIComponent(hospitalInput);
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${query}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.length > 0) {
+                            const hospLat = parseFloat(data[0].lat);
+                            const hospLon = parseFloat(data[0].lon);
+                            checkDistance(seekerLat, seekerLon, hospLat, hospLon, hospitalInput);
+                        } else {
+                            showGeofenceError("Hospital location not found. Try typing a simpler name (e.g. Lissie Hospital).");
+                        }
+                    })
+                    .catch(() => {
+                        showGeofenceError("Location service unavailable. Please check your internet connection.");
+                    });
+            }
+        },
+        (error) => {
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Verify GPS`;
+            let msg = "Geolocation permission denied. Please allow location access to continue.";
+            if (error.code === error.POSITION_UNAVAILABLE) {
+                msg = "GPS location is currently unavailable on your device.";
+            } else if (error.code === error.TIMEOUT) {
+                msg = "GPS verification timed out. Please try again.";
+            }
+            showGeofenceError(msg);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+    
+    function checkDistance(lat1, lon1, lat2, lon2, hospitalName) {
+        const distance = calculateDistance(lat1, lon1, lat2, lon2);
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Verify GPS`;
+        
+        if (distance <= 50) {
+            closeLocationModal();
+            openContactModal(pendingContactId, pendingContactName, pendingContactPhone, pendingContactDetails);
+        } else {
+            showGeofenceError(`Verification failed. You are ${Math.round(distance)}m away from ${hospitalName}. You must be within 50m.`);
+        }
+    }
+    
+    function showGeofenceError(msg) {
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Verify GPS`;
+        errLabel.innerText = msg;
+        errLabel.style.display = 'block';
+    }
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // in metres
+}
+
+function handleContactClick(targetId, targetName, targetPhone, targetDetails, isDonor) {
     if (!currentUser) {
         openAuthModal();
         return;
@@ -386,7 +530,16 @@ function handleContactClick(targetId, targetName, targetPhone, targetDetails) {
         localStorage.setItem(USERS_KEY, JSON.stringify(users));
     }
     
-    openContactModal(targetId, targetName, targetPhone, targetDetails);
+    // Check if we are contacting a donor - if so, enforce Geofence!
+    if (isDonor) {
+        pendingContactId = targetId;
+        pendingContactName = targetName;
+        pendingContactPhone = targetPhone;
+        pendingContactDetails = targetDetails;
+        openLocationModal();
+    } else {
+        openContactModal(targetId, targetName, targetPhone, targetDetails);
+    }
 }
 
 function triggerReport() {
